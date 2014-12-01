@@ -5,6 +5,12 @@ __pycache__/
 # C extensions
 *.so
 
+#PyCharm
+.idea
+
+#Keys dir
+keys/
+
 # Distribution / packaging
 .Python
 env/
