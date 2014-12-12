@@ -1,0 +1,28 @@
+{
+    "meta": {
+        "savecert": false,
+        "embedkeys": true,
+        "tls-auth": true
+    },
+    "both": {
+        "dev": "tun",
+        "proto": "udp",
+        "cipher": "AES-128-CBC",
+        "auth": "SHA1",
+        "persist-key": true,
+        "persist-tun": true,
+        "comp-lzo": true,
+        "user": "nobody",
+        "group": "nobody"
+    },
+    "server": {
+        "server": "10.8.8.0 255.255.255.0",
+        "push": ["\"redirect-gateway def1 bypass-dhcp\"", "\"dhcp-option DNS 8.8.8.8\""],
+        "duplicate-cn": true,
+        "keepalive": "10 120"
+    },
+    "client": {
+        "resolv-retry": "infinite",
+        "nobind": true
+    }
+}
