@@ -13,7 +13,8 @@
         "persist-tun": true,
         "comp-lzo": true,
         "user": "nobody",
-        "group": "nobody"
+        "group": "nobody",
+        "ns-cert-type": "server"
     },
     "server": {
         "server": "10.8.8.0 255.255.255.0",
