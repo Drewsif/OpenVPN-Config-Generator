@@ -9,6 +9,9 @@ import random
 import os
 import json
 import subprocess
+import sys
+if sys.version_info == (2,):
+    input = raw_input
 
 def create_ca(size=2048, valid=315360000, CN=None):
     """
@@ -16,7 +19,7 @@ def create_ca(size=2048, valid=315360000, CN=None):
 
     size - The RSA key size to be used
     valid - The time is seconds the key should be valid for
-    CN - The CN to be used for the cert
+    CN - The CN to be used for the cert. None will create a UUID
     """
     if CN is None:
         CN = str(uuid.uuid4())
@@ -32,12 +35,12 @@ def create_ca(size=2048, valid=315360000, CN=None):
     ca.set_issuer(ca.get_subject())
     ca.set_pubkey(key)
     ca.add_extensions([
-        OpenSSL.crypto.X509Extension("basicConstraints", False, "CA:TRUE"),
-        OpenSSL.crypto.X509Extension("keyUsage", False, "keyCertSign, cRLSign"),
-        OpenSSL.crypto.X509Extension("subjectKeyIdentifier", False, "hash", subject=ca)
+        OpenSSL.crypto.X509Extension(b"basicConstraints", False, b"CA:TRUE"),
+        OpenSSL.crypto.X509Extension(b"keyUsage", False, b"keyCertSign, cRLSign"),
+        OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=ca)
     ])
     ca.add_extensions([
-        OpenSSL.crypto.X509Extension("authorityKeyIdentifier", False, "keyid:always",issuer=ca)
+        OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=ca)
     ])
     ca.sign(key, "sha256")
     return ca, key
@@ -53,7 +56,7 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
     Optional:
     size - The RSA key size to be used
     valid - The time is seconds the key should be valid for
-    CN - The CN to be used for the cert
+    CN - The CN to be used for the cert. None will create a UUID
     """
     if CN is None:
         CN = str(uuid.uuid4())
@@ -70,24 +73,32 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
     cert.set_pubkey(key)
     if is_server:
         cert.add_extensions([
-            OpenSSL.crypto.X509Extension("basicConstraints", False, "CA:FALSE"),
-            OpenSSL.crypto.X509Extension("keyUsage", False, "digitalSignature, keyEncipherment"),
-            OpenSSL.crypto.X509Extension("extendedKeyUsage", False, "serverAuth"),
-            OpenSSL.crypto.X509Extension("subjectKeyIdentifier", False, "hash", subject=cert),
-            OpenSSL.crypto.X509Extension("authorityKeyIdentifier", False, "keyid:always",issuer=cacert)
+            OpenSSL.crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
+            OpenSSL.crypto.X509Extension(b"keyUsage", False, b"digitalSignature, keyEncipherment"),
+            OpenSSL.crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth"),
+            OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
+            OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert)
         ])
     else:
         cert.add_extensions([
-            OpenSSL.crypto.X509Extension("basicConstraints", False, "CA:FALSE"),
-            OpenSSL.crypto.X509Extension("keyUsage", False, "digitalSignature"),
-            OpenSSL.crypto.X509Extension("extendedKeyUsage", False, "clientAuth"),
-            OpenSSL.crypto.X509Extension("subjectKeyIdentifier", False, "hash", subject=cert),
-            OpenSSL.crypto.X509Extension("authorityKeyIdentifier", False, "keyid:always",issuer=cacert)
+            OpenSSL.crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
+            OpenSSL.crypto.X509Extension(b"keyUsage", False, b"digitalSignature"),
+            OpenSSL.crypto.X509Extension(b"extendedKeyUsage", False, b"clientAuth"),
+            OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
+            OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert)
         ])
     cert.sign(cakey, "sha256")
     return cert, key
 
 def gen_dhparams(size=1024):
+    """
+    Generate Diffie Hellman parameters by calling openssl. Returns a string.
+
+    I don't like doing it like this but pyopenssl doesn't seem to
+    have a way to do this natively.
+
+    size - The size of the prime to generate.
+    """
     cmd = ['openssl', 'dhparam', '-out', 'dh.tmp', str(size)]
     ret = subprocess.check_call(cmd)
     if ret != 0:
@@ -98,6 +109,7 @@ def gen_dhparams(size=1024):
     return params
 
 def gen_tlsauth_key():
+    """Generate an openvpn secret key by calling openvpn. Returns a string."""
     cmd = ['openvpn', '--genkey', '--secret', 'ta.tmp']
     ret = subprocess.check_call(cmd)
     if ret != 0:
@@ -108,6 +120,12 @@ def gen_tlsauth_key():
     return key
 
 def create_confs(name, confdict, path='.'):
+    """
+    Creates the client and server configs.
+
+    name - The name of the run which is prepended to the config file names
+    confdict - A dictionary representing the config parameters.
+    """
     clientfile = open(os.path.join(path, name+'_client.ovpn'), 'w')
     serverfile = open(os.path.join(path, name+'_server.ovpn'), 'w')
 
@@ -148,8 +166,8 @@ def create_confs(name, confdict, path='.'):
         else:
             serverfile.write(key + ' ' + value + '\n')
 
-    host = raw_input("Enter Hostname/IP: ").rstrip()
-    port = raw_input("Enter port number: ").rstrip()
+    host = str(input("Enter Hostname/IP: ")).rstrip()
+    port = str(input("Enter port number: ")).rstrip()
     clientfile.write('remote ' + host + ' ' + port + '\n')
     serverfile.write('port ' + port + '\n')
 
@@ -157,11 +175,11 @@ def create_confs(name, confdict, path='.'):
     servercert, serverkey = create_cert(True, cacert, cakey)
     clientcert, clientkey = create_cert(False, cacert, cakey)
 
-    cacert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cacert)
-    clientkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, clientkey)
-    clientcert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, clientcert)
-    serverkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, serverkey)
-    servercert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, servercert)
+    cacert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cacert).decode('ascii')
+    clientkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, clientkey).decode('ascii')
+    clientcert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, clientcert).decode('ascii')
+    serverkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, serverkey).decode('ascii')
+    servercert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, servercert).decode('ascii')
 
     if 'meta' in confdict:
         if confdict['meta'].get('embedkeys', False):
