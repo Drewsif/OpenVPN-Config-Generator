@@ -10,7 +10,7 @@ import os
 import json
 import subprocess
 import sys
-if sys.version_info == (2,):
+if sys.version_info[:1] == (2,):
     input = raw_input
 
 def create_ca(size=2048, valid=315360000, CN=None):
@@ -74,7 +74,7 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
     if is_server:
         cert.add_extensions([
             OpenSSL.crypto.X509Extension(b"basicConstraints", False, b"CA:FALSE"),
-            OpenSSL.crypto.X509Extension(b"keyUsage", False, b"digitalSignature, keyEncipherment"),
+            OpenSSL.crypto.X509Extension(b"keyUsage", False, b"digitalSignature,keyEncipherment"),
             OpenSSL.crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth"),
             OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
             OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert)
@@ -101,8 +101,6 @@ def gen_dhparams(size=1024):
     """
     cmd = ['openssl', 'dhparam', '-out', 'dh.tmp', str(size)]
     ret = subprocess.check_call(cmd)
-    if ret != 0:
-        raise SystemError("OpenSSL failed...")
     with open('dh.tmp') as dh:
         params = dh.read()
     os.remove('dh.tmp')
@@ -112,8 +110,6 @@ def gen_tlsauth_key():
     """Generate an openvpn secret key by calling openvpn. Returns a string."""
     cmd = ['openvpn', '--genkey', '--secret', 'ta.tmp']
     ret = subprocess.check_call(cmd)
-    if ret != 0:
-        raise SystemError("OpenVPN failed...")
     with open('ta.tmp') as key:
         key = key.read()
     os.remove('ta.tmp')
