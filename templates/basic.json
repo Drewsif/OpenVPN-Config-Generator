@@ -1,6 +1,6 @@
 {
     "meta": {
-        "savecert": false,
+        "savecerts": false,
         "embedkeys": true,
         "tls-auth": true
     },
@@ -13,8 +13,7 @@
         "persist-tun": true,
         "comp-lzo": true,
         "user": "nobody",
-        "group": "nobody",
-        "ns-cert-type": "server"
+        "group": "nobody"
     },
     "server": {
         "server": "10.8.8.0 255.255.255.0",
@@ -24,6 +23,7 @@
     },
     "client": {
         "resolv-retry": "infinite",
-        "nobind": true
+        "nobind": true,
+        "ns-cert-type": "server"
     }
 }
