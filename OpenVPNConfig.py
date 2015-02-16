@@ -22,7 +22,7 @@ def create_ca(size=2048, valid=315360000, CN=None):
     CN - The CN to be used for the cert. None will create a UUID
     """
     if CN is None:
-        CN = str(uuid.uuid4())
+        CN = 'CA-'+str(uuid.uuid4())
     key = OpenSSL.crypto.PKey()
     key.generate_key(OpenSSL.crypto.TYPE_RSA, size)
 
@@ -59,7 +59,10 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
     CN - The CN to be used for the cert. None will create a UUID
     """
     if CN is None:
-        CN = str(uuid.uuid4())
+        if is_server:
+            CN='server-'+str(uuid.uuid4())
+        else:
+            CN = 'client-'+str(uuid.uuid4())
     key = OpenSSL.crypto.PKey()
     key.generate_key(OpenSSL.crypto.TYPE_RSA, size)
 
@@ -77,7 +80,8 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
             OpenSSL.crypto.X509Extension(b"keyUsage", False, b"digitalSignature,keyEncipherment"),
             OpenSSL.crypto.X509Extension(b"extendedKeyUsage", False, b"serverAuth"),
             OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
-            OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert)
+            OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert),
+            OpenSSL.crypto.X509Extension(b"nsCertType", False, b"server")
         ])
     else:
         cert.add_extensions([
@@ -85,7 +89,8 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
             OpenSSL.crypto.X509Extension(b"keyUsage", False, b"digitalSignature"),
             OpenSSL.crypto.X509Extension(b"extendedKeyUsage", False, b"clientAuth"),
             OpenSSL.crypto.X509Extension(b"subjectKeyIdentifier", False, b"hash", subject=cert),
-            OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert)
+            OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert),
+            OpenSSL.crypto.X509Extension(b"nsCertType", False, b"client")
         ])
     cert.sign(cakey, "sha256")
     return cert, key
@@ -172,6 +177,7 @@ def create_confs(name, confdict, path='.'):
     clientcert, clientkey = create_cert(False, cacert, cakey)
 
     cacert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cacert).decode('ascii')
+    cakey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, cakey).decode('ascii')
     clientkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, clientkey).decode('ascii')
     clientcert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, clientcert).decode('ascii')
     serverkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, serverkey).decode('ascii')
@@ -192,6 +198,43 @@ def create_confs(name, confdict, path='.'):
             auth = gen_tlsauth_key()
             clientfile.write('<tls-auth>\n'+auth+'</tls-auth>\n')
             serverfile.write('<tls-auth>\n'+auth+'</tls-auth>\n')
+        if confdict['meta'].get('savecerts', False):
+            try:
+                with open(name+'_client.cer', 'w') as fileout:
+                    fileout.write(clientcert)
+            except Exception as e:
+                print('Unable to write', name+'_client.cer')
+                print(e)
+            try:
+                with open(name+'_client.key', 'w') as fileout:
+                    fileout.write(clientkey)
+            except Exception as e:
+                print('Unable to write', name+'_client.key')
+                print(e)
+            try:
+                with open(name+'_server.cer', 'w') as fileout:
+                    fileout.write(servercert)
+            except Exception as e:
+                print('Unable to write', name+'_server.cer')
+                print(e)
+            try:
+                with open(name+'_server.key', 'w') as fileout:
+                    fileout.write(serverkey)
+            except Exception as e:
+                print('Unable to write', name+'_server.key')
+                print(e)
+            try:
+                with open(name+'_ca.cer', 'w') as fileout:
+                    fileout.write(cacert)
+            except Exception as e:
+                print('Unable to write', name+'_ca.cer')
+                print(e)
+            try:
+                with open(name+'_ca.key', 'w') as fileout:
+                    fileout.write(cakey)
+            except Exception as e:
+                print('Unable to write', name+'_ca.key')
+                print(e)
 
 def _parse_args():
     """Parse command line args"""
@@ -202,10 +245,13 @@ def _parse_args():
 
     return parser.parse_args()
 
-if __name__ == "__main__":
+def _testing_main():
+    """Temporary while testing key creation"""
     args = _parse_args()
     with open(os.path.join(args.templates,'basic.json')) as fh:
         conf = json.load(fh)
     create_confs("test", conf)
     #basic_pki("keys")
 
+if __name__ == "__main__":
+    _testing_main()
