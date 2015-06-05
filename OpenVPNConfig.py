@@ -241,17 +241,63 @@ def _parse_args():
     import argparse
     parser = argparse.ArgumentParser(description='Create OpenVPN client/server configs.')
     parser.add_argument('-i', '--interactive', action='store_true', help='Interactively configure templates')
-    parser.add_argument('-t', '--templates', help='The config file/directory to use', default=os.path.join(os.path.dirname(__file__), 'templates'))
+    parser.add_argument('-t', '--template', help='The config file/directory to use', default=os.path.join(os.path.dirname(__file__), 'templates'))
 
     return parser.parse_args()
 
 def _testing_main():
     """Temporary while testing key creation"""
     args = _parse_args()
-    with open(os.path.join(args.templates,'basic.json')) as fh:
+    with open(os.path.join(args.template,'basic.json')) as fh:
         conf = json.load(fh)
     create_confs("test", conf)
     #basic_pki("keys")
 
+def _ask_template(templates):
+    """Prompts user for the template to use"""
+    i = 1
+    print('Which template would you like to use?')
+    for template in templates:
+        print(i, ') ', template['meta']['name'], ': ', template['meta']['description'],sep='')
+        i += 1
+    ret = int(input('Enter selection: '))
+    while ret <= 0 or ret > i-1:
+        ret = int(input('Enter selection: '))
+    return templates[ret-1]
+
+def main():
+    args = _parse_args()
+
+    # Read in configs
+    confs = []
+    if os.path.isdir(args.template):
+        list = os.listdir(args.template)
+        for f in list:
+            f = os.path.join(args.template, f)
+            if os.path.isfile(f):
+                print(f)
+                with open(f, 'r') as fh:
+                    try:
+                        confs.append(json.loads(fh.read()))
+                    except Exception as e:
+                        print('WARNING:', f, 'is not valid json.', e, file=sys.stderr)
+    else:
+        with open(args.template, 'r') as fh:
+            try:
+                confs.append(json.loads(fh.readall()))
+            except Exception as e:
+                print('WARNING:', args.template, 'is not valid json.', e, file=sys.stderr)
+
+    if len(confs) == 0:
+        print('ERROR: No valid templates to use', file=sys.stderr)
+        exit(-1)
+    elif len(confs) == 1:
+        template = confs[0]
+    else:
+        template = _ask_template(confs)
+
+    name = input('Enter a name for the configs: ')
+    create_confs(name, template)
+
 if __name__ == "__main__":
-    _testing_main()
+    main()
