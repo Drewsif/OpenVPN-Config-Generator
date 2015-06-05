@@ -1,0 +1,30 @@
+{
+    "meta": {
+        "name": "LAN Games",
+        "description": "A basic setup for playing LAN games",
+        "savecerts": false,
+        "embedkeys": true,
+        "tls-auth": true
+    },
+    "both": {
+        "dev": "tap",
+        "proto": "udp",
+        "cipher": "AES-128-CBC",
+        "auth": "SHA1",
+        "persist-key": true,
+        "persist-tun": true,
+        "user": "nobody",
+        "group": "nobody"
+    },
+    "server": {
+        "server": "192.168.232.0 255.255.255.0",
+        "duplicate-cn": true,
+        "keepalive": "10 120",
+        "client-to-client": true
+    },
+    "client": {
+        "resolv-retry": "infinite",
+        "nobind": true,
+        "ns-cert-type": "server"
+    }
+}
