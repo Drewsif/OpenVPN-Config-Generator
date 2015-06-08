@@ -265,6 +265,16 @@ def _ask_template(templates):
         ret = int(input('Enter selection: '))
     return templates[ret-1]
 
+def _ask_interactive():
+    conf_changes = {'meta': {}, 'client': {}, 'server': {}}
+    ret = input('Would you like to allow more then one client to connect with the same config at the same time? [Y/n]: ').lower()
+    if ret == 'n':
+        conf_changes['server']['duplicate-cn'] = False
+    else:
+        conf_changes['server']['duplicate-cn'] = True
+
+    return conf_changes
+
 def main():
     args = _parse_args()
 
@@ -275,12 +285,19 @@ def main():
         for f in list:
             f = os.path.join(args.template, f)
             if os.path.isfile(f):
-                print(f)
                 with open(f, 'r') as fh:
                     try:
-                        confs.append(json.loads(fh.read()))
+                        data = json.loads(fh.read())
                     except Exception as e:
                         print('WARNING:', f, 'is not valid json.', e, file=sys.stderr)
+                        continue
+                if 'meta' in data:
+                    if 'name' not in data['meta']:
+                        data['meta']['name'] = f
+                    if 'description' not in data['meta']:
+                        data['meta']['description'] = ''
+                confs.append(data)
+
     else:
         with open(args.template, 'r') as fh:
             try:
@@ -297,6 +314,10 @@ def main():
         template = _ask_template(confs)
 
     name = input('Enter a name for the configs: ')
+    if args.interactive:
+        updates = _ask_interactive()
+        for key in updates:
+            template[key].update(updates[key])
     create_confs(name, template)
 
 if __name__ == "__main__":
