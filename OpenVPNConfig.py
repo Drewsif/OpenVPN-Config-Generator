@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/
@@ -105,7 +105,13 @@ def gen_dhparams(size=1024):
     size - The size of the prime to generate.
     """
     cmd = ['openssl', 'dhparam', '-out', 'dh.tmp', str(size)]
-    ret = subprocess.check_call(cmd)
+    try:
+        subprocess.check_call(cmd)
+    except subprocess.CalledProcessError:
+        # Sometimes we get a non-zero exit code, no idea why...
+        print('Calling of openssl failed... Trying again')
+        subprocess.check_call(cmd)
+
     with open('dh.tmp') as dh:
         params = dh.read()
     os.remove('dh.tmp')
@@ -120,41 +126,19 @@ def gen_tlsauth_key():
     os.remove('ta.tmp')
     return key
 
-def create_confs(name, confdict, path='.'):
-    """
-    Creates the client and server configs.
-
-    name - The name of the run which is prepended to the config file names
-    confdict - A dictionary representing the config parameters.
-    """
-    clientfile = open(os.path.join(path, name+'_client.ovpn'), 'w')
+def _create_server_conf(name, confdict, port, cacert, serverkey, servercert, tls_auth=False, path='.'):
     serverfile = open(os.path.join(path, name+'_server.ovpn'), 'w')
 
-    clientfile.write('client\n')
     for key, value in confdict['both'].items():
         if value is False:
             continue
         elif value is True:
-            clientfile.write(key + '\n')
             serverfile.write(key + '\n')
         elif isinstance(value, list):
             for v in value:
-                clientfile.write(key + ' ' + v + '\n')
                 serverfile.write(key + ' ' + v + '\n')
         else:
-            clientfile.write(key + ' ' + value + '\n')
             serverfile.write(key + ' ' + value + '\n')
-
-    for key, value in confdict['client'].items():
-        if value is False:
-            continue
-        elif value is True:
-            clientfile.write(key + '\n')
-        elif isinstance(value, list):
-            for v in value:
-                clientfile.write(key + ' ' + v + '\n')
-        else:
-            clientfile.write(key + ' ' + value + '\n')
 
     for key, value in confdict['server'].items():
         if value is False:
@@ -167,37 +151,89 @@ def create_confs(name, confdict, path='.'):
         else:
             serverfile.write(key + ' ' + value + '\n')
 
-    host = str(input("Enter Hostname/IP: ")).rstrip()
-    port = str(input("Enter port number: ")).rstrip()
-    clientfile.write('remote ' + host + ' ' + port + '\n')
     serverfile.write('port ' + port + '\n')
 
-    cacert, cakey = create_ca()
-    servercert, serverkey = create_cert(True, cacert, cakey)
-    clientcert, clientkey = create_cert(False, cacert, cakey)
-
-    cacert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cacert).decode('ascii')
-    cakey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, cakey).decode('ascii')
-    clientkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, clientkey).decode('ascii')
-    clientcert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, clientcert).decode('ascii')
-    serverkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, serverkey).decode('ascii')
-    servercert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, servercert).decode('ascii')
-
     if 'meta' in confdict:
-        if confdict['meta'].get('embedkeys', False):
-            clientfile.write('<ca>\n'+cacert+'</ca>\n')
+        if confdict['meta'].get('embedkeys', True):
             serverfile.write('<ca>\n'+cacert+'</ca>\n')
-            clientfile.write('<key>\n'+clientkey+'</key>\n')
-            clientfile.write('<cert>\n'+clientcert+'</cert>\n')
             serverfile.write('<key>\n'+serverkey+'</key>\n')
             serverfile.write('<cert>\n'+servercert+'</cert>\n')
             serverfile.write('<dh>\n'+gen_dhparams()+'</dh>\n')
-        if confdict['meta'].get('tls-auth', False):
+        if tls_auth is not False:
             serverfile.write('key-direction 0\n')
+            serverfile.write('<tls-auth>\n'+tls_auth+'</tls-auth>\n')
+
+def _create_client_conf(name, confdict, host, port, cacert, clientkey, clientcert, tls_auth=False, path='.'):
+    clientfile = open(os.path.join(path, name+'_client.ovpn'), 'w')
+
+    clientfile.write('client\n')
+    clientfile.write('remote ' + host + ' ' + port + '\n')
+
+    for key, value in confdict['both'].items():
+        if value is False:
+            continue
+        elif value is True:
+            clientfile.write(key + '\n')
+        elif isinstance(value, list):
+            for v in value:
+                clientfile.write(key + ' ' + v + '\n')
+        else:
+            clientfile.write(key + ' ' + value + '\n')
+
+    for key, value in confdict['client'].items():
+        if value is False:
+            continue
+        elif value is True:
+            clientfile.write(key + '\n')
+        elif isinstance(value, list):
+            for v in value:
+                clientfile.write(key + ' ' + v + '\n')
+        else:
+            clientfile.write(key + ' ' + value + '\n')
+
+    if 'meta' in confdict:
+        if confdict['meta'].get('embedkeys', True):
+            clientfile.write('<ca>\n'+cacert+'</ca>\n')
+            clientfile.write('<key>\n'+clientkey+'</key>\n')
+            clientfile.write('<cert>\n'+clientcert+'</cert>\n')
+        if tls_auth is not False:
             clientfile.write('key-direction 1\n')
-            auth = gen_tlsauth_key()
-            clientfile.write('<tls-auth>\n'+auth+'</tls-auth>\n')
-            serverfile.write('<tls-auth>\n'+auth+'</tls-auth>\n')
+            clientfile.write('<tls-auth>\n'+tls_auth+'</tls-auth>\n')
+
+def create_confs(name, confdict, path='.'):
+    """
+    Creates the client and server configs.
+
+    name - The name of the run which is prepended to the config file names
+    confdict - A dictionary representing the config parameters.
+    """
+
+    host = str(input("Enter Hostname/IP: ")).rstrip()
+    port = str(input("Enter port number: ")).rstrip()
+
+    tls_auth = False
+    if 'meta' in confdict:
+        if confdict['meta'].get('tls-auth', False):
+            tls_auth = gen_tlsauth_key()
+
+    # Create CA
+    cacert, cakey = create_ca()
+    text_cacert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cacert).decode('ascii')
+    text_cakey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, cakey).decode('ascii')
+
+    # Create a server
+    servercert, serverkey = create_cert(True, cacert, cakey)
+    serverkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, serverkey).decode('ascii')
+    servercert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, servercert).decode('ascii')
+    _create_server_conf(name, confdict, port, text_cacert, serverkey, servercert, tls_auth=tls_auth, path=path)
+
+    # Create a client
+    clientcert, clientkey = create_cert(False, cacert, cakey)
+    clientkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, clientkey).decode('ascii')
+    clientcert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, clientcert).decode('ascii')
+    _create_client_conf(name, confdict, host, port, text_cacert, clientkey, clientcert, tls_auth=tls_auth, path=path)
+
+    if 'meta' in confdict:
         if confdict['meta'].get('savecerts', False):
             try:
                 with open(name+'_client.cer', 'w') as fileout:
@@ -225,13 +261,13 @@ def create_confs(name, confdict, path='.'):
                 print(e)
             try:
                 with open(name+'_ca.cer', 'w') as fileout:
-                    fileout.write(cacert)
+                    fileout.write(text_cacert)
             except Exception as e:
                 print('Unable to write', name+'_ca.cer')
                 print(e)
             try:
                 with open(name+'_ca.key', 'w') as fileout:
-                    fileout.write(cakey)
+                    fileout.write(text_cakey)
             except Exception as e:
                 print('Unable to write', name+'_ca.key')
                 print(e)
@@ -242,16 +278,7 @@ def _parse_args():
     parser = argparse.ArgumentParser(description='Create OpenVPN client/server configs.')
     parser.add_argument('-i', '--interactive', action='store_true', help='Interactively configure templates')
     parser.add_argument('-t', '--template', help='The config file/directory to use', default=os.path.join(os.path.dirname(__file__), 'templates'))
-
     return parser.parse_args()
-
-def _testing_main():
-    """Temporary while testing key creation"""
-    args = _parse_args()
-    with open(os.path.join(args.template,'basic.json')) as fh:
-        conf = json.load(fh)
-    create_confs("test", conf)
-    #basic_pki("keys")
 
 def _ask_template(templates):
     """Prompts user for the template to use"""
