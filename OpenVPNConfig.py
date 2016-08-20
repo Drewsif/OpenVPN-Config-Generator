@@ -10,8 +10,11 @@ import os
 import json
 import subprocess
 import sys
+sha256 = 'sha256'
 if sys.version_info[:1] == (2,):
     input = raw_input
+    sha256 = b'sha256'
+
 
 def create_ca(size=2048, valid=315360000, CN=None):
     """
@@ -42,8 +45,9 @@ def create_ca(size=2048, valid=315360000, CN=None):
     ca.add_extensions([
         OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=ca)
     ])
-    ca.sign(key, "sha256")
+    ca.sign(key, sha256)
     return ca, key
+
 
 def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
     """
@@ -92,8 +96,9 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
             OpenSSL.crypto.X509Extension(b"authorityKeyIdentifier", False, b"keyid:always",issuer=cacert),
             OpenSSL.crypto.X509Extension(b"nsCertType", False, b"client")
         ])
-    cert.sign(cakey, "sha256")
+    cert.sign(cakey, sha256)
     return cert, key
+
 
 def gen_dhparams(size=1024):
     """
@@ -117,6 +122,7 @@ def gen_dhparams(size=1024):
     os.remove('dh.tmp')
     return params
 
+
 def gen_tlsauth_key():
     """Generate an openvpn secret key by calling openvpn. Returns a string."""
     cmd = ['openvpn', '--genkey', '--secret', 'ta.tmp']
@@ -125,6 +131,7 @@ def gen_tlsauth_key():
         key = key.read()
     os.remove('ta.tmp')
     return key
+
 
 def _create_server_conf(name, confdict, port, cacert, serverkey, servercert, tls_auth=False, path='.'):
     serverfile = open(os.path.join(path, name+'_server.ovpn'), 'w')
@@ -163,6 +170,7 @@ def _create_server_conf(name, confdict, port, cacert, serverkey, servercert, tls
             serverfile.write('key-direction 0\n')
             serverfile.write('<tls-auth>\n'+tls_auth+'</tls-auth>\n')
 
+
 def _create_client_conf(name, confdict, host, port, cacert, clientkey, clientcert, tls_auth=False, path='.'):
     clientfile = open(os.path.join(path, name+'_client.ovpn'), 'w')
 
@@ -199,6 +207,7 @@ def _create_client_conf(name, confdict, host, port, cacert, clientkey, clientcer
         if tls_auth is not False:
             clientfile.write('key-direction 1\n')
             clientfile.write('<tls-auth>\n'+tls_auth+'</tls-auth>\n')
+
 
 def create_confs(name, confdict, path='.'):
     """
@@ -272,6 +281,7 @@ def create_confs(name, confdict, path='.'):
                 print('Unable to write', name+'_ca.key')
                 print(e)
 
+
 def _parse_args():
     """Parse command line args"""
     import argparse
@@ -279,6 +289,7 @@ def _parse_args():
     parser.add_argument('-i', '--interactive', action='store_true', help='Interactively configure templates')
     parser.add_argument('-t', '--template', help='The config file/directory to use', default=os.path.join(os.path.dirname(__file__), 'templates'))
     return parser.parse_args()
+
 
 def _ask_template(templates):
     """Prompts user for the template to use"""
@@ -292,6 +303,7 @@ def _ask_template(templates):
         ret = int(input('Enter selection: '))
     return templates[ret-1]
 
+
 def _ask_interactive():
     conf_changes = {'meta': {}, 'client': {}, 'server': {}}
     ret = input('Would you like to allow more then one client to connect with the same config at the same time? [Y/n]: ').lower()
@@ -301,6 +313,7 @@ def _ask_interactive():
         conf_changes['server']['duplicate-cn'] = True
 
     return conf_changes
+
 
 def main():
     args = _parse_args()
