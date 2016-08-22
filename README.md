@@ -41,3 +41,5 @@ The meta section is used for information related to the build. The following key
 - **savecerts**: If set to true this will save all the certs and keys used to generate the configurations.
 - **embedkeys**: If set to true the keys and certs needed to run the configuration will be embed into the ovpn file. If false they will be referenced by filename.
 - **tls-auth**: If set to true tls-auth will be configured for clients and servers.
+- **keysize**: The size of the keys to be generated.
+- **dhsize**: The size of the Diffie–Hellman parameters that will be generated.

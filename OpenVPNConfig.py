@@ -133,7 +133,9 @@ def gen_tlsauth_key():
     return key
 
 
-def _create_server_conf(name, confdict, port, cacert, serverkey, servercert, tls_auth=False, path='.'):
+def _create_server_conf(name, confdict, port, cacert, serverkey, servercert, tls_auth=False, dh_params=None, path='.'):
+    if dh_params is None:
+        dh_params = gen_dhparams()
     serverfile = open(os.path.join(path, name+'_server.ovpn'), 'w')
 
     for key, value in confdict['both'].items():
@@ -165,7 +167,7 @@ def _create_server_conf(name, confdict, port, cacert, serverkey, servercert, tls
             serverfile.write('<ca>\n'+cacert+'</ca>\n')
             serverfile.write('<key>\n'+serverkey+'</key>\n')
             serverfile.write('<cert>\n'+servercert+'</cert>\n')
-            serverfile.write('<dh>\n'+gen_dhparams()+'</dh>\n')
+            serverfile.write('<dh>\n'+dh_params+'</dh>\n')
         if tls_auth is not False:
             serverfile.write('key-direction 0\n')
             serverfile.write('<tls-auth>\n'+tls_auth+'</tls-auth>\n')
@@ -223,23 +225,28 @@ def create_confs(name, confdict, path='.', host=None, port=None):
         port = str(input("Enter port number: ")).rstrip()
 
     tls_auth = False
+    keysize = None
+    dhsize = None
     if 'meta' in confdict:
         if confdict['meta'].get('tls-auth', False):
             tls_auth = gen_tlsauth_key()
+        keysize = confdict['meta'].get('keysize', 2048)
+        dhsize = confdict['meta'].get('dhsize', 2048)
+
 
     # Create CA
-    cacert, cakey = create_ca()
+    cacert, cakey = create_ca(size=keysize)
     text_cacert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, cacert).decode('ascii')
     text_cakey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, cakey).decode('ascii')
 
     # Create a server
-    servercert, serverkey = create_cert(True, cacert, cakey)
+    servercert, serverkey = create_cert(True, cacert, cakey, size=keysize)
     serverkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, serverkey).decode('ascii')
     servercert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, servercert).decode('ascii')
-    _create_server_conf(name, confdict, port, text_cacert, serverkey, servercert, tls_auth=tls_auth, path=path)
+    _create_server_conf(name, confdict, port, text_cacert, serverkey, servercert, tls_auth=tls_auth, dh_params=gen_dhparams(dhsize), path=path)
 
     # Create a client
-    clientcert, clientkey = create_cert(False, cacert, cakey)
+    clientcert, clientkey = create_cert(False, cacert, cakey, size=keysize)
     clientkey = OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, clientkey).decode('ascii')
     clientcert = OpenSSL.crypto.dump_certificate(OpenSSL.crypto.FILETYPE_PEM, clientcert).decode('ascii')
     _create_client_conf(name, confdict, host, port, text_cacert, clientkey, clientcert, tls_auth=tls_auth, path=path)
