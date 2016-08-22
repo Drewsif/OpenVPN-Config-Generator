@@ -1,3 +1,6 @@
+OpenVPN configuration files
+*.ovpn
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
