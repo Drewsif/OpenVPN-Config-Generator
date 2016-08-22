@@ -209,7 +209,7 @@ def _create_client_conf(name, confdict, host, port, cacert, clientkey, clientcer
             clientfile.write('<tls-auth>\n'+tls_auth+'</tls-auth>\n')
 
 
-def create_confs(name, confdict, path='.'):
+def create_confs(name, confdict, path='.', host=None, port=None):
     """
     Creates the client and server configs.
 
@@ -217,8 +217,10 @@ def create_confs(name, confdict, path='.'):
     confdict - A dictionary representing the config parameters.
     """
 
-    host = str(input("Enter Hostname/IP: ")).rstrip()
-    port = str(input("Enter port number: ")).rstrip()
+    if host is None:
+        host = str(input("Enter Hostname/IP: ")).rstrip()
+    if port is None:
+        port = str(input("Enter port number: ")).rstrip()
 
     tls_auth = False
     if 'meta' in confdict:
@@ -288,6 +290,9 @@ def _parse_args():
     parser = argparse.ArgumentParser(description='Create OpenVPN client/server configs.')
     parser.add_argument('-i', '--interactive', action='store_true', help='Interactively configure templates')
     parser.add_argument('-t', '--template', help='The config file/directory to use', default=os.path.join(os.path.dirname(__file__), 'templates'))
+    parser.add_argument('-s', '--server', help='The hostname or ip of the server to use', default=None)
+    parser.add_argument('-p', '--port', help='The port number to use', default=None)
+    parser.add_argument('-n', '--name', help='The name to use when saving configs', default=None)
     return parser.parse_args()
 
 
@@ -321,29 +326,30 @@ def main():
     # Read in configs
     confs = []
     if os.path.isdir(args.template):
-        list = os.listdir(args.template)
-        for f in list:
-            f = os.path.join(args.template, f)
-            if os.path.isfile(f):
-                with open(f, 'r') as fh:
+        dir_list = os.listdir(args.template)
+        for filename in dir_list:
+            filename = os.path.join(args.template, filename)
+            if os.path.isfile(filename):
+                with open(filename, 'r') as fh:
                     try:
                         data = json.loads(fh.read())
                     except Exception as e:
-                        print('WARNING:', f, 'is not valid json.', e, file=sys.stderr)
+                        print('WARNING:', filename, 'is not valid json.', e, file=sys.stderr)
                         continue
                 if 'meta' in data:
                     if 'name' not in data['meta']:
-                        data['meta']['name'] = f
+                        data['meta']['name'] = filename
                     if 'description' not in data['meta']:
                         data['meta']['description'] = ''
                 confs.append(data)
-
-    else:
+    elif os.path.isfile(args.template):
         with open(args.template, 'r') as fh:
             try:
-                confs.append(json.loads(fh.readall()))
+                confs.append(json.loads(fh.read()))
             except Exception as e:
                 print('WARNING:', args.template, 'is not valid json.', e, file=sys.stderr)
+    else:
+        print('ERROR:', args.template, 'is not valid file or dir.', file=sys.stderr)
 
     if len(confs) == 0:
         print('ERROR: No valid templates to use', file=sys.stderr)
@@ -353,12 +359,14 @@ def main():
     else:
         template = _ask_template(confs)
 
-    name = input('Enter a name for the configs: ')
+    name = args.name
+    if name is None:
+        name = input('Enter a name for the configs: ')
     if args.interactive:
         updates = _ask_interactive()
         for key in updates:
             template[key].update(updates[key])
-    create_confs(name, template)
+    create_confs(name, template, host=args.server, port=args.port)
 
 if __name__ == "__main__":
     main()
