@@ -100,7 +100,7 @@ def create_cert(is_server, cacert, cakey, size=2048, valid=315360000, CN=None):
     return cert, key
 
 
-def gen_dhparams(size=1024):
+def gen_dhparams(size=2048):
     """
     Generate Diffie Hellman parameters by calling openssl. Returns a string.
 
