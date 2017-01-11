@@ -4,6 +4,12 @@ OpenVPN-Config-Generator is made to help automate the process of creating OpenVP
 
 You can use one of the pre-built templates if your new to OpenVPN or you can build your own template to fit your needs.
 
+Install
+-------
+OpenSSL is required to generate certificates and OpenVPN is needed to create tlsauth keys. Make sure OpenVPN and OpenSSL are installed.
+
+Run `pip install -r requirements.txt` to install needed python packages.
+
 Template File
 -------------
 Template files are written in JSON and have 4 keys in them. They are meta, client, server, and both. 
